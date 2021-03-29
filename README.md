@@ -1,2 +1,20 @@
-# IntentClassification-and-SlotTagging
-NTU CSIE bachelor&amp;master&amp;PhD 2nd semester elective - Applied Deep Learning - Project 1 / 台大資工大碩博下學期選修 - 深度學習之應用 - 專案作業一
+# Sample Code for Homework 1 ADL NTU 109 Spring
+
+## Environment
+```shell
+# If you have conda, we recommend you to build a conda environment called "adl"
+make
+# otherwise
+pip install -r requirements.txt
+```
+
+## Preprocessing
+```shell
+# To preprocess intent detectiona and slot tagging datasets
+bash preprocess.sh
+```
+
+## Intent detection
+```shell
+python train_intent.py
+```
