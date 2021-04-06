@@ -7,7 +7,8 @@ from typing import Dict
 import torch
 
 from dataset import SeqClsDataset
-from model import SeqClassifier
+# from pytorch_model import SeqClassifier
+from tf_model import SeqClassifier
 from utils import Vocab
 
 

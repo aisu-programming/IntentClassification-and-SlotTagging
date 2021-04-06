@@ -1,0 +1,5 @@
+cache
+glove.840B.300d.*
+*.pyc
+*.h5
+logs
