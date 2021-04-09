@@ -35,7 +35,7 @@ def parse_args() -> Namespace:
     parser = ArgumentParser()
 
     # data
-    parser.add_argument("--max_len", type=int, default=28)
+    parser.add_argument("--max_len", type=int, default=35)
 
     # model
     parser.add_argument("--hidden_size", type=int, default=1024)
@@ -61,16 +61,16 @@ def parse_args() -> Namespace:
     # path
     parser.add_argument(
         "--data_dir", type=Path, help="Directory to the dataset.",
-        default="./data/intent")
+        default="./data/slot")
     parser.add_argument(
         "--cache_dir", type=Path, help="Directory to the preprocessed caches.",
-        default="./cache/intent")
+        default="./cache/slot")
     parser.add_argument(
         "--ckpt_dir", type=Path, help="Directory to save the model file.",
-        default=f"./ckpt/intent/{now_time}")
+        default=f"./ckpt/slot/{now_time}")
     parser.add_argument(
         "--logs_dir", type=Path, help="Directory to save the logs file.",
-        default=f"./logs/intent/{now_time}")
+        default=f"./logs/slot/{now_time}")
 
     args = parser.parse_args()
     return args
@@ -89,13 +89,13 @@ def __get_data(cache_dir) -> Dict[str, DataLoader]:
     with open(args.cache_dir / "vocab.pkl", "rb") as f:
         vocab: Vocab = pickle.load(f)
 
-    intent_idx_path = args.cache_dir / "intent2idx.json"
-    intent2idx: Dict[str, int] = json.loads(intent_idx_path.read_text())
+    tag_idx_path = args.cache_dir / "tag2idx.json"
+    tag2idx: Dict[str, int] = json.loads(tag_idx_path.read_text())
 
     data_paths = {split: args.data_dir / f"{split}.json" for split in SPLITS}
     data = {split: json.loads(path.read_text()) for split, path in data_paths.items()}
     datasets: Dict[str, SeqClsDataset] = {
-        split: SeqClsDataset(split_data, vocab, intent2idx, args.max_len)
+        split: SeqClsDataset(split_data, vocab, tag2idx, args.max_len)
         for split, split_data in data.items()
     }
 
@@ -103,9 +103,9 @@ def __get_data(cache_dir) -> Dict[str, DataLoader]:
     data_loaders: Dict[str, DataLoader] = {
         split: DataLoader(
             split_dataset,
-            batch_size = 15000,
+            batch_size = 7244,
             shuffle = False,
-            collate_fn = split_dataset.collate_fn_intent
+            collate_fn = split_dataset.collate_fn_slot
         ) for split, split_dataset in datasets.items()
     }
 
@@ -117,12 +117,12 @@ def main(args):
     datasets, data_loaders = __get_data(args.cache_dir)
 
     for d in data_loaders[TRAIN]:
-        train_X = tf.convert_to_tensor(d['encoded_split_text'], dtype=tf.float32)
-        train_Y = tf.convert_to_tensor(d['intent_one_hot'], dtype=tf.float32)
+        train_X = tf.convert_to_tensor(d['encoded_tokens'], dtype=tf.float32)
+        train_Y = tf.convert_to_tensor(d['tag_one_hot'], dtype=tf.float32)
 
     for d in data_loaders[DEV]:
-        valid_X = tf.convert_to_tensor(d['encoded_split_text'], dtype=tf.float32)
-        valid_Y = tf.convert_to_tensor(d['intent_one_hot'], dtype=tf.float32)
+        valid_X = tf.convert_to_tensor(d['encoded_tokens'], dtype=tf.float32)
+        valid_Y = tf.convert_to_tensor(d['tag_one_hot'], dtype=tf.float32)
 
     embeddings = tf.convert_to_tensor(torch.load(args.cache_dir / "embeddings.pt"))
     model = SeqClassifier(
@@ -134,7 +134,7 @@ def main(args):
         dropout=args.dropout,
         bidirectional=args.bidirectional,
         num_class=datasets[TRAIN].num_classes,
-        mode='intent'                # Added by me
+        mode='slot'                  # Added by me
     )
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=args.lr,

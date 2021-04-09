@@ -9,6 +9,7 @@ tensorflow-estimator==2.4.0
 tensorflow==2.4.1
 torch==1.7.1
 tqdm==4.56.2
+seqeval==1.2.2
 
 aiohttp==3.7.4.post0
 requests-oauthlib==1.3.0
@@ -55,7 +56,6 @@ pydantic==1.7.3
 pyparsing==2.4.7
 pyyaml==5.3.1
 rsa==4.7.2
-seqeval==1.2.2
 six==1.15.0
 smart-open==3.0.0
 spacy-legacy==3.0.1

@@ -20,7 +20,7 @@ class SeqClsDataset(Dataset):
         self.data = data
         self.vocab = vocab
         self.label_mapping = label_mapping
-        self._idx2label = {idx: intent for intent, idx in self.label_mapping.items()}
+        self._idx2label = {idx: label for label, idx in self.label_mapping.items()}
         self.max_len = max_len
 
     def __len__(self) -> int:
@@ -34,26 +34,36 @@ class SeqClsDataset(Dataset):
     def num_classes(self) -> int:
         return len(self.label_mapping)
 
-    def collate_fn(self, samples: List[Dict]) -> Dict:
-        # TODO: implement collate_fn  # Done
+    def collate_fn_intent(self, samples: List[Dict]) -> Dict:
         split_text = [ s['text'].split() for s in samples ]
         output = {
-            # 'text': [ s['text'] for s in samples ],
-            # 'split_text': split_text,
-            # 'split_text_no_mark': [ s['text'].replace(',', '').replace('!', '').split() for s in samples ],
-            # 'intent': [ s['intent'] for s in samples ],
-            # 'intent_idx': [ self.label2idx(s['intent']) for s in samples ],
-            # 'split_intent': [ s['intent'].split('_') for s in samples ],
             # 'id': [ s['id'] for s in samples ],
             # 'id': [ int(s['id'].split('-')[1]) for s in samples ],
+            'encoded_split_text': self.vocab.encode_batch(split_text, to_len=self.max_len),
+            'intent_one_hot': [
+                one_hot(tensor(self.label2idx(s['intent'])), self.num_classes) for s in samples
+            ]
         }
-        output['embedded_split_text'] = self.vocab.encode_batch(split_text, to_len=self.max_len)
-        output['intent_one_hot'] = [
-            one_hot(tensor(self.label2idx(s['intent'])), self.num_classes) for s in samples
-        ]
         output['intent_one_hot'] = [ l.numpy().tolist() for l in output['intent_one_hot'] ]
         return output
-        # raise NotImplementedError
+
+    def collate_fn_slot(self, samples: List[Dict]) -> Dict:
+        tokens = [ s['tokens'] for s in samples ]
+        tag_one_hot = [ s['tags'] for s in samples ]
+        for i, row in enumerate(tag_one_hot):
+            for j in range(len(row)):
+                tag_one_hot[i][j] = \
+                    one_hot(tensor(self.label2idx(tag_one_hot[i][j])), self.num_classes).numpy().tolist()
+            if len(row) != self.max_len:
+                for _ in range(self.max_len-len(row)):
+                    tag_one_hot[i].append([0]*self.num_classes)
+        output = {
+            # 'id': [ s['id'] for s in samples ],
+            # 'id': [ int(s['id'].split('-')[1]) for s in samples ],
+            'encoded_tokens': self.vocab.encode_batch(tokens, to_len=self.max_len),
+            'tag_one_hot': tag_one_hot,
+        }
+        return output
 
     def label2idx(self, label: str):
         return self.label_mapping[label]

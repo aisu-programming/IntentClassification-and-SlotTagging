@@ -8,16 +8,19 @@ import tensorflow as tf
 
 ''' Function '''
 class PositionalEncoding300k(tf.keras.layers.Layer):
-    def __init__(self, text_len, batch_size, dropout=0.1):
+    def __init__(self, batch_size, text_len, dropout=0.1):
         super(PositionalEncoding300k, self).__init__()
-        pos_enc          = np.zeros((batch_size, text_len), dtype=np.float32)
-        position         = tf.expand_dims(np.arange(0, batch_size, dtype=np.float32), axis=1)
-        div_term         = np.exp(np.arange(0, text_len, 2, dtype=np.float32) * (-math.log(10000.0) / text_len))
-        pos_enc[:, 0::2] = tf.math.sin(position * div_term)
-        pos_enc[:, 1::2] = tf.math.cos(position * div_term)
-        pos_enc          = tf.expand_dims(pos_enc, axis=2) * np.ones(300)
+        dim = 300
+        posit = np.arange(text_len)[:, np.newaxis]                       # (28, 1)
+        depth = np.arange(dim)[np.newaxis, :]                            # (1, 300)
+        angle = posit / np.power(10000, (2*(depth//2)/np.float32(dim)))  # (28, 300)
+        angle[:, 0::2] = np.sin(angle[:, 0::2])
+        angle[:, 1::2] = np.cos(angle[:, 1::2])
 
-        self.pos_enc = pos_enc
+        self.pos_enc = tf.convert_to_tensor(
+            np.concatenate([angle[np.newaxis, :, :]]*batch_size),
+            dtype=tf.float32
+        )
         self.dropout = tf.keras.layers.Dropout(dropout)
 
     def call(self, x):
@@ -162,10 +165,12 @@ class SeqClassifier(tf.keras.Model):
         dropout: float,
         bidirectional: bool,
         num_class: int,
+        mode: str,        # Added by me
     ):
         super(SeqClassifier, self).__init__()
         # TODO: model architecture
 
+        self.mode = mode
         # (BATCH_SIZE, text_len)
         self.embedding = tf.keras.layers.Embedding(
             input_dim=6491,
@@ -187,41 +192,70 @@ class SeqClassifier(tf.keras.Model):
             num_layers=num_layers,
             bidirectional=bidirectional
         )
-        self.mask = np.triu(np.ones([text_len, text_len]), k=1)
         # (BATCH_SIZE, text_len, 300)
-        self.dropout = tf.keras.layers.Dropout(dropout)
-        # (BATCH_SIZE, text_len, 300)
-        self.denses = [
-            # (BATCH_SIZE, text_len, 300)
-            tf.keras.layers.Dense(100),
-            # (BATCH_SIZE, text_len, 100)
-            tf.keras.layers.Dense(25),
-            # (BATCH_SIZE, text_len, 25)
-            tf.keras.layers.Dense(5),
-            # (BATCH_SIZE, text_len, 5)
-            tf.keras.layers.Dense(1),
-            # (BATCH_SIZE, text_len, 1)
-        ]
-        self.reshape = tf.keras.layers.Reshape((text_len, ))
-        # (BATCH_SIZE, text_len)
-        self.softmax = tf.keras.layers.Dense(150, activation=tf.nn.softmax)
-        # (BATCH_SIZE, 150)
+        if mode == 'intent':
+            self.droupout_1 = tf.keras.layers.Dropout(dropout)
+            self.last_layers_1 = [
+                # (BATCH_SIZE, text_len, 300)
+                tf.keras.layers.Dense(450),
+                # (BATCH_SIZE, text_len, 450)
+                tf.keras.layers.Dense(300),
+                # (BATCH_SIZE, text_len, 300)
+                tf.keras.layers.Dense(100),
+                # (BATCH_SIZE, text_len, 100)
+                tf.keras.layers.Dense(25),
+                # (BATCH_SIZE, text_len, 25)
+                tf.keras.layers.Dense(5),
+                # (BATCH_SIZE, text_len, 5)
+                tf.keras.layers.Dense(1),
+                # (BATCH_SIZE, text_len, 1)
+                tf.keras.layers.Reshape((text_len, )),
+            ]
+            self.droupout_2 = tf.keras.layers.Dropout(dropout)
+            self.last_layers_2 = [
+                # (BATCH_SIZE, text_len)
+                tf.keras.layers.Dense(50),
+                # (BATCH_SIZE, 50)
+                tf.keras.layers.Dense(100),
+                # (BATCH_SIZE, 100)
+                tf.keras.layers.Dense(200),
+                # (BATCH_SIZE, 200)
+                tf.keras.layers.Dense(150, activation=tf.nn.softmax),
+                # (BATCH_SIZE, 150)
+            ]
+        elif mode == 'slot':
+            self.droupout = tf.keras.layers.Dropout(dropout)
+            self.last_layers = [
+                # (BATCH_SIZE, text_len, 300)
+                tf.keras.layers.Dense(450),
+                # (BATCH_SIZE, text_len, 450)
+                tf.keras.layers.Dense(300),
+                # (BATCH_SIZE, text_len, 300)
+                tf.keras.layers.Dense(100),
+                # (BATCH_SIZE, text_len, 100)
+                tf.keras.layers.Dense(30),
+                # (BATCH_SIZE, text_len, 30)
+                tf.keras.layers.Dense(9, activation=tf.nn.softmax),
+                # (BATCH_SIZE, text_len, 9)
+            ]
+        else: raise Exception
 
-    # @property
-    # def encoder_output_size(self) -> int:
-    #     # TODO: calculate the output dimension of rnn
-    #     raise NotImplementedError
+    @property
+    def encoder_output_size(self) -> int:
+        # TODO: calculate the output dimension of rnn
+        raise NotImplementedError
 
-    def call(self, embedded_split_text) -> Dict[str, tf.Tensor]:
-        # TODO: implement model forward
-        x = self.embedding(embedded_split_text)
+    def call(self, encoded_tokens, training) -> Dict[str, tf.Tensor]:
+        x = self.embedding(encoded_tokens)
         x = self.pos_enc_300k(x)
-        # x = self.encoder(x, mask=self.mask)
+        # x = self.encoder(x, mask=np.triu(np.ones([text_len, text_len]), k=1))
         x = self.encoder(x, mask=None)
-        x = self.dropout(x)
-        for dense in self.denses: x = dense(x)
-        x = self.reshape(x)
-        x = self.softmax(x)
-
+        if self.mode == 'intent':
+            x = self.droupout_1(x, training=training)
+            for layer in self.last_layers_1: x = layer(x)
+            x = self.droupout_2(x, training=training)
+            for layer in self.last_layers_2: x = layer(x)
+        elif self.mode == 'slot':
+            x = self.droupout(x, training=training)
+            for layer in self.last_layers: x = layer(x)
         return x
-        # raise NotImplementedError
