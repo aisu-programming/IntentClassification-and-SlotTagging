@@ -1,7 +1,7 @@
 ''' Libraries from sample code '''
 from typing import List, Dict
 from torch.utils.data import Dataset
-from utils import Vocab
+from utils_intent import Vocab
 
 
 ''' Libraries added by me '''
@@ -34,8 +34,7 @@ class SeqClsDataset(Dataset):
     def num_classes(self) -> int:
         return len(self.label_mapping)
 
-
-    def collate_fn_intent(self, samples: List[Dict]) -> Dict:
+    def collate_fn(self, samples: List[Dict]) -> Dict:
         split_text = [ s['text'].split() for s in samples ]
         output = {
             # 'id': [ s['id'] for s in samples ],
@@ -50,39 +49,6 @@ class SeqClsDataset(Dataset):
             output['intent_one_hot'] = [ l.numpy().tolist() for l in output['intent_one_hot'] ]
         
         return output
-
-
-    def collate_fn_slot(self, samples: List[Dict]) -> Dict:
-        tokens = [ s['tokens'] for s in samples ]
-        # tag_one_hot = [ s['tags'] for s in samples ]
-        # for i, row in enumerate(tag_one_hot):
-        #     for j in range(len(row)):
-        #         tag_one_hot[i][j] = \
-        #             one_hot(tensor(self.label2idx(tag_one_hot[i][j])), self.num_classes).numpy().tolist()
-        #     if len(row) != self.max_len:
-        #         for _ in range(self.max_len-len(row)):
-        #             tag_one_hot[i].append([0]*self.num_classes)
-        output = {
-            # 'id': [ s['id'] for s in samples ],
-            # 'id': [ int(s['id'].split('-')[1]) for s in samples ],
-            'encoded_tokens': self.vocab.encode_batch(tokens, to_len=self.max_len),
-            # 'tag_one_hot': tag_one_hot,
-        }
-
-        if 'tags' in samples[0].keys():
-            tags = [ s['tags'] for s in samples ]
-            for i, tag_row in enumerate(tags):
-                tags_i_tmp = ['S']
-                for tag in tag_row: tags_i_tmp.append(tag)
-                for _ in range(self.max_len-len(tags_i_tmp)-1): tags_i_tmp.append('P')
-                tags_i_tmp.append('E')
-                tags[i] = tags_i_tmp
-                for j in range(len(tag_row)):
-                    tags[i][j] = self.label2idx(tags[i][j])
-            output['tags'] = tags
-        
-        return output
-
 
     def label2idx(self, label: str):
         return self.label_mapping[label]

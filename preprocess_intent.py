@@ -11,7 +11,7 @@ from typing import List, Dict
 import torch
 from tqdm.auto import tqdm
 
-from utils import Vocab
+from utils_intent import Vocab
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",

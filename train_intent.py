@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Dict
 import torch
 from tqdm import trange
-from dataset import SeqClsDataset
-from utils import Vocab
+from dataset_intent import SeqClsDataset
+from utils_intent import Vocab
 
 
 ''' Libraries added by me '''
@@ -39,13 +39,13 @@ def parse_args() -> Namespace:
 
     # model
     parser.add_argument("--hidden_size", type=int, default=1024)
-    parser.add_argument("--num_layers", type=int, default=4)
+    parser.add_argument("--num_layers", type=int, default=6)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
     parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--decay_rate", type=float, default=0.9)
+    parser.add_argument("--decay_rate", type=float, default=0.85)
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)
@@ -54,8 +54,8 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--device", type=torch.device,
         help="cpu, cuda, cuda:0, cuda:1", default="cuda")
-    parser.add_argument("--num_epoch", type=int, default=500)
-    parser.add_argument("--patience", type=int, default=25)
+    parser.add_argument("--num_epoch", type=int, default=150)
+    parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--restore_best_weights", type=bool, default=False)
 
     # path
@@ -105,7 +105,7 @@ def __get_data(cache_dir) -> Dict[str, DataLoader]:
             split_dataset,
             batch_size = 15000,
             shuffle = False,
-            collate_fn = split_dataset.collate_fn_intent
+            collate_fn = split_dataset.collate_fn
         ) for split, split_dataset in datasets.items()
     }
 
@@ -126,15 +126,15 @@ def main(args):
 
     embeddings = tf.convert_to_tensor(torch.load(args.cache_dir / "embeddings.pt"))
     model = SeqClassifier(
-        embeddings=embeddings,
+        mode='intent',               # Added by me
         text_len=args.max_len,       # Added by me
+        embeddings=embeddings,
         batch_size=args.batch_size,  # Added by me
+        dropout=args.dropout,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
-        dropout=args.dropout,
         bidirectional=args.bidirectional,
         num_class=datasets[TRAIN].num_classes,
-        mode='intent'                # Added by me
     )
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=args.lr,
@@ -221,9 +221,9 @@ def main(args):
 ''' Execution '''
 if __name__ == "__main__":
     args = parse_args()
-    args.ckpt_dir = Path(f"{args.ckpt_dir}_numlayers={args.num_layers}")
+    args.ckpt_dir = Path(f"{args.ckpt_dir}_lr={args.lr}")
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
-    args.logs_dir = Path(f"{args.logs_dir}_numlayers={args.num_layers}")
+    args.logs_dir = Path(f"{args.logs_dir}_lr={args.lr}")
     args.logs_dir.mkdir(parents=True, exist_ok=True)
     save_args(args)
     main(args)

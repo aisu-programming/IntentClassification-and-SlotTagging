@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Dict
 import torch
 from tqdm import trange
-from dataset import SeqClsDataset
-from utils import Vocab
+from dataset_slot import SeqClsDataset
+from utils_slot import Vocab
 
 
 ''' Libraries added by me '''
@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow as tf
 from torch.utils.data import DataLoader
 # from pytorch_model import SeqClassifier
-from tf_model_2 import SeqClassifier
+from tf_model_3 import SeqClassifier
 
 
 ''' Parameters from sample code '''
@@ -44,7 +44,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
-    parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--lr", type=float, default=1e-6)
     parser.add_argument("--decay_rate", type=float, default=0.9)
 
     # data loader
@@ -105,11 +105,22 @@ def __get_data(cache_dir) -> Dict[str, DataLoader]:
             split_dataset,
             batch_size = 7244,
             shuffle = False,
-            collate_fn = split_dataset.collate_fn_slot
+            collate_fn = split_dataset.collate_fn
         ) for split, split_dataset in datasets.items()
     }
 
     return datasets, data_loaders
+
+
+def custom_loss(y_true, y_pred):
+    cce = tf.keras.losses.CategoricalCrossentropy()
+    # losses = tf.convert_to_tensor(0, dtype=tf.float32)
+    # for batch_i in range(tf.shape(y_true)[0]):
+    #     losses += cce(y_true[batch_i], y_pred[batch_i])
+    # losses /= tf.cast(tf.shape(y_true)[0], dtype=tf.float32)
+    # print(losses, cce(y_true, y_pred))
+    # return losses
+    return cce(y_true, y_pred)
 
 
 def main(args):
@@ -126,15 +137,15 @@ def main(args):
 
     embeddings = tf.convert_to_tensor(torch.load(args.cache_dir / "embeddings.pt"))
     model = SeqClassifier(
-        embeddings=embeddings,
+        mode='slot',                 # Added by me
         text_len=args.max_len,       # Added by me
+        embeddings=embeddings,
         batch_size=args.batch_size,  # Added by me
+        dropout=args.dropout,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
-        dropout=args.dropout,
         bidirectional=args.bidirectional,
         num_class=datasets[TRAIN].num_classes,
-        mode='slot'                  # Added by me
     )
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=args.lr,
@@ -143,7 +154,8 @@ def main(args):
     )
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
-        loss="categorical_crossentropy",
+        # loss=custom_loss,
+        loss=tf.keras.losses.CategoricalCrossentropy(reduction=tf.keras.losses.Reduction.SUM),
         metrics=["accuracy"],
         # run_eagerly=True
     )

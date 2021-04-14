@@ -108,12 +108,12 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.pff_layer_norm = tf.keras.layers.LayerNormalization(epsilon=1e-6)
     
     def call(self, x, training, mask):
-        attn_output = self.mha(x, x, x, mask)
-        x += self.mha_dropout(attn_output, training=training)
+        x_tmp = self.mha(x, x, x, mask)
+        x += self.mha_dropout(x_tmp, training=training)
         x = self.mha_layer_norm(x)
 
-        pff_output = self.pff(x)
-        x += self.pff_dropout(pff_output, training=training)
+        x_tmp = self.pff(x)
+        x += self.pff_dropout(x_tmp, training=training)
         x = self.pff_layer_norm(x)
         return x
 
@@ -157,6 +157,7 @@ class Encoder(tf.keras.layers.Layer):
 class SeqClassifier(tf.keras.Model):
     def __init__(
         self,
+        mode: str,        # Added by me
         embeddings: tf.Tensor,
         text_len: int,    # Added by me
         batch_size: int,  # Added by me
@@ -165,23 +166,24 @@ class SeqClassifier(tf.keras.Model):
         dropout: float,
         bidirectional: bool,
         num_class: int,
-        mode: str,        # Added by me
     ):
         super(SeqClassifier, self).__init__()
         # TODO: model architecture
 
         self.mode = mode
+        self.text_len = text_len
         # (BATCH_SIZE, text_len)
         self.embedding = tf.keras.layers.Embedding(
-            input_dim=6491,
+            input_dim=6491 if mode=='intent' else 4117,
             output_dim=300,
             input_length=text_len,
             embeddings_initializer=tf.constant_initializer(embeddings.numpy())
         )
         # (BATCH_SIZE, text_len, 300)
         self.pos_enc_300k = PositionalEncoding300k(
+            batch_size=batch_size,
             text_len=text_len,
-            batch_size=batch_size
+            dropout=dropout,
         )
         # (BATCH_SIZE, text_len, 300)
         self.encoder = Encoder(
@@ -194,49 +196,63 @@ class SeqClassifier(tf.keras.Model):
         )
         # (BATCH_SIZE, text_len, 300)
         if mode == 'intent':
-            self.droupout_1 = tf.keras.layers.Dropout(dropout)
-            self.last_layers_1 = [
+            # self.dropout_1 = tf.keras.layers.Dropout(dropout)
+            # self.last_layers_1 = [
+            #     # (BATCH_SIZE, text_len, 300)
+            #     tf.keras.layers.Dense(450),
+            #     # (BATCH_SIZE, text_len, 450)
+            #     tf.keras.layers.Dense(300),
+            #     # (BATCH_SIZE, text_len, 300)
+            #     tf.keras.layers.Dense(100),
+            #     # (BATCH_SIZE, text_len, 100)
+            #     tf.keras.layers.Dense(25),
+            #     # (BATCH_SIZE, text_len, 25)
+            #     tf.keras.layers.Dense(5),
+            #     # (BATCH_SIZE, text_len, 5)
+            #     tf.keras.layers.Dense(1),
+            #     # (BATCH_SIZE, text_len, 1)
+            #     tf.keras.layers.Reshape((text_len, )),
+            # ]
+            # self.dropout_2 = tf.keras.layers.Dropout(dropout)
+            # self.last_layers_2 = [
+            #     # (BATCH_SIZE, text_len)
+            #     tf.keras.layers.Dense(50),
+            #     # (BATCH_SIZE, 50)
+            #     tf.keras.layers.Dense(100),
+            #     # (BATCH_SIZE, 100)
+            #     tf.keras.layers.Dense(200),
+            #     # (BATCH_SIZE, 200)
+            #     tf.keras.layers.Dense(150, activation=tf.nn.softmax),
+            #     # (BATCH_SIZE, 150)
+            # ]
+            self.dropout = tf.keras.layers.Dropout(dropout)
+            self.last_layers = [
                 # (BATCH_SIZE, text_len, 300)
-                tf.keras.layers.Dense(450),
-                # (BATCH_SIZE, text_len, 450)
+                tf.keras.layers.Flatten(),
+                # (BATCH_SIZE, 8400)
+                tf.keras.layers.Dense(9000),
+                tf.keras.layers.Dense(6000),
+                tf.keras.layers.Dense(3000),
+                tf.keras.layers.Dense(1000),
+                tf.keras.layers.Dense(600),
                 tf.keras.layers.Dense(300),
-                # (BATCH_SIZE, text_len, 300)
-                tf.keras.layers.Dense(100),
-                # (BATCH_SIZE, text_len, 100)
-                tf.keras.layers.Dense(25),
-                # (BATCH_SIZE, text_len, 25)
-                tf.keras.layers.Dense(5),
-                # (BATCH_SIZE, text_len, 5)
-                tf.keras.layers.Dense(1),
-                # (BATCH_SIZE, text_len, 1)
-                tf.keras.layers.Reshape((text_len, )),
-            ]
-            self.droupout_2 = tf.keras.layers.Dropout(dropout)
-            self.last_layers_2 = [
-                # (BATCH_SIZE, text_len)
-                tf.keras.layers.Dense(50),
-                # (BATCH_SIZE, 50)
-                tf.keras.layers.Dense(100),
-                # (BATCH_SIZE, 100)
-                tf.keras.layers.Dense(200),
-                # (BATCH_SIZE, 200)
                 tf.keras.layers.Dense(150, activation=tf.nn.softmax),
                 # (BATCH_SIZE, 150)
             ]
         elif mode == 'slot':
-            self.droupout = tf.keras.layers.Dropout(dropout)
+            self.dropout = tf.keras.layers.Dropout(dropout)
             self.last_layers = [
                 # (BATCH_SIZE, text_len, 300)
-                tf.keras.layers.Dense(450),
-                # (BATCH_SIZE, text_len, 450)
-                tf.keras.layers.Dense(300),
-                # (BATCH_SIZE, text_len, 300)
-                tf.keras.layers.Dense(100),
-                # (BATCH_SIZE, text_len, 100)
-                tf.keras.layers.Dense(30),
-                # (BATCH_SIZE, text_len, 30)
+                tf.keras.layers.Flatten(),
+                # (BATCH_SIZE, 10500)
+                tf.keras.layers.Dense(15000),
+                tf.keras.layers.Dense(10000),
+                tf.keras.layers.Dense(5000),
+                tf.keras.layers.Dense(2500),
+                tf.keras.layers.Dense(1000),
+                tf.keras.layers.Dense(text_len*15),
+                tf.keras.layers.Reshape((text_len, 15)),
                 tf.keras.layers.Dense(9, activation=tf.nn.softmax),
-                # (BATCH_SIZE, text_len, 9)
             ]
         else: raise Exception
 
@@ -245,17 +261,25 @@ class SeqClassifier(tf.keras.Model):
         # TODO: calculate the output dimension of rnn
         raise NotImplementedError
 
+    def create_padding_mask(self, x):
+        x = tf.cast(tf.math.equal(x, 0), tf.float32)
+        return x[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, text_len)
+
     def call(self, encoded_tokens, training) -> Dict[str, tf.Tensor]:
+        enc_padding_mask = self.create_padding_mask(encoded_tokens)
         x = self.embedding(encoded_tokens)
         x = self.pos_enc_300k(x)
-        # x = self.encoder(x, mask=np.triu(np.ones([text_len, text_len]), k=1))
-        x = self.encoder(x, mask=None)
+        # x = self.encoder(x, mask=enc_padding_mask)
+        x = self.encoder(x, mask=np.triu(np.ones([self.text_len, self.text_len]), k=1))
+        # x = self.encoder(x, mask=None)
         if self.mode == 'intent':
-            x = self.droupout_1(x, training=training)
-            for layer in self.last_layers_1: x = layer(x)
-            x = self.droupout_2(x, training=training)
-            for layer in self.last_layers_2: x = layer(x)
+            # x = self.dropout_1(x, training=training)
+            # for layer in self.last_layers_1: x = layer(x)
+            # x = self.dropout_2(x, training=training)
+            # for layer in self.last_layers_2: x = layer(x)
+            x = self.dropout(x, training=training)
+            for layer in self.last_layers: x = layer(x)
         elif self.mode == 'slot':
-            x = self.droupout(x, training=training)
+            x = self.dropout(x, training=training)
             for layer in self.last_layers: x = layer(x)
         return x
