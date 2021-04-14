@@ -17,7 +17,7 @@ import numpy as np
 
 import tensorflow as tf
 from torch.utils.data import DataLoader
-from tf_model_3 import SeqClassifier
+from tf_model_slot import SeqClassifier
 from seqeval.metrics import classification_report
 from seqeval.scheme import IOB2
 
@@ -42,7 +42,6 @@ def parse_args() -> Namespace:
     parser.add_argument("--hidden_size", type=int, default=512)
     parser.add_argument("--num_layers", type=int, default=4)
     parser.add_argument("--dropout", type=float, default=0.1)
-    parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
     # parser.add_argument("--lr", type=float, default=1e-1)
@@ -245,7 +244,6 @@ def main(args):
         dropout=args.dropout,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
-        bidirectional=args.bidirectional,
         num_class=datasets[TRAIN].num_classes,
     )
 
@@ -319,9 +317,9 @@ def main(args):
 ''' Execution '''
 if __name__ == "__main__":
     args = parse_args()
-    args.ckpt_dir = Path(f"{args.ckpt_dir}_numlayers={args.num_layers}")
+    # args.ckpt_dir = Path(f"{args.ckpt_dir}_numlayers={args.num_layers}")
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
-    args.logs_dir = Path(f"{args.logs_dir}_numlayers={args.num_layers}")
+    # args.logs_dir = Path(f"{args.logs_dir}_numlayers={args.num_layers}")
     args.logs_dir.mkdir(parents=True, exist_ok=True)
     save_args(args)
     main(args)

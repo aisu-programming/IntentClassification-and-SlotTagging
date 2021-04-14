@@ -221,9 +221,9 @@ def main(args):
 ''' Execution '''
 if __name__ == "__main__":
     args = parse_args()
-    args.ckpt_dir = Path(f"{args.ckpt_dir}_lr={args.lr}")
+    # args.ckpt_dir = Path(f"{args.ckpt_dir}_lr={args.lr}")
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
-    args.logs_dir = Path(f"{args.logs_dir}_lr={args.lr}")
+    # args.logs_dir = Path(f"{args.logs_dir}_lr={args.lr}")
     args.logs_dir.mkdir(parents=True, exist_ok=True)
     save_args(args)
     main(args)
